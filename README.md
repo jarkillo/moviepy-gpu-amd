@@ -12,11 +12,7 @@ This is a **custom fork of MoviePy** that improves **GPU acceleration** for vide
 - **Custom implementation** of `FFMPEG_VideoWriter` that improves compatibility and performance.
 - If `h264_amf` or `hevc_amf` is selected, it **forces GPU encoding** and bypasses CPU fallback.
 
-### ✅ **3. Integrated Wrapper (`write_videofile_wrapped`)**
-- The standard `write_videofile()` now **uses an optimized wrapper** to avoid encoding bottlenecks.
-- Ensures `ffmpeg` is called with the **same parameters** that work when running it manually in the terminal.
-
-### ✅ **4. Full Control Over MoviePy Execution**
+### ✅ **3. Full Control Over MoviePy Execution**
 - This fork allows **more customization** for users who need hardware acceleration.
 - It removes limitations where `preset` was **forced to "medium"**, which caused issues with certain codecs.
 
