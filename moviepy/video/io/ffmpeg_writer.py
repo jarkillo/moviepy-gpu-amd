@@ -44,9 +44,6 @@ class FFMPEG_VideoWriter:
     audiofile : str, optional
       The name of an audio file that will be incorporated to the video.
 
-    audio_codec : str, optional
-      FFMPEG audio codec. If None, ``"copy"`` codec is used.
-
     preset : str, optional
       Sets the time that FFMPEG will take to compress the video. The slower,
       the better the compression rate. Possibilities are: ``"ultrafast"``,
@@ -84,7 +81,6 @@ class FFMPEG_VideoWriter:
         fps,
         codec="libx264",
         audiofile=None,
-        audio_codec=None,
         preset="medium",
         bitrate=None,
         with_mask=False,
@@ -98,7 +94,6 @@ class FFMPEG_VideoWriter:
         self.logfile = logfile
         self.filename = filename
         self.codec = codec
-        self.audio_codec = audio_codec
         self.ext = self.filename.split(".")[-1]
 
         pixel_format = "rgba" if with_mask else "rgb24"
@@ -123,17 +118,22 @@ class FFMPEG_VideoWriter:
             "-i",
             "-",
         ]
-        if audiofile is not None:
-            if audio_codec is None:
-                audio_codec = "copy"
-            cmd.extend(["-i", audiofile, "-acodec", audio_codec])
 
-        if codec == "h264_nvenc":
-            cmd.extend(["-c:v", codec])
+            # 🔹 Evitar el argumento 'preset' si el codec es AMD
+        if codec not in ["h264_amf", "hevc_amf"]:
+            self.preset = "medium"
         else:
-            cmd.extend(["-vcodec", codec])
+            self.preset = None
 
-        cmd.extend(["-preset", preset])
+        if audiofile is not None:
+            cmd.extend(["-i", audiofile, "-acodec", "copy"])
+
+        cmd.extend(["-vcodec", codec])
+
+        if preset is not None:
+            cmd.extend(["-preset", preset])
+        elif codec in ["h264_amf", "hevc_amf"]:
+            cmd.extend(["-quality", "balanced"])
 
         if ffmpeg_params is not None:
             cmd.extend(ffmpeg_params)
@@ -148,11 +148,7 @@ class FFMPEG_VideoWriter:
         if codec == "libvpx" and with_mask:
             cmd.extend(["-pix_fmt", "yuva420p"])
             cmd.extend(["-auto-alt-ref", "0"])
-        elif (
-            (codec == "libx264" or codec == "h264_nvenc")
-            and (size[0] % 2 == 0)
-            and (size[1] % 2 == 0)
-        ):
+        elif (codec == "libx264") and (size[0] % 2 == 0) and (size[1] % 2 == 0):
             cmd.extend(["-pix_fmt", "yuva420p"])
 
         cmd.extend([ffmpeg_escape_filename(filename)])
@@ -161,7 +157,9 @@ class FFMPEG_VideoWriter:
             {"stdout": sp.DEVNULL, "stderr": logfile, "stdin": sp.PIPE}
         )
 
+        print("FFMPEG Command:", cmd)
         self.proc = sp.Popen(cmd, **popen_params)
+
 
     def write_frame(self, img_array):
         """Writes one frame in the file."""
@@ -182,14 +180,13 @@ class FFMPEG_VideoWriter:
                 f"writing file {self.filename}:\n\n {ffmpeg_error}"
             )
 
-            if "Unknown encoder" in ffmpeg_error or "Unknown decoder" in ffmpeg_error:
+            if "Unknown encoder" in ffmpeg_error:
                 error += (
                     "\n\nThe video export failed because FFMPEG didn't find the "
-                    "specified codec for video or audio. "
+                    f"specified codec for video encoding {self.codec}. "
                     "Please install this codec or change the codec when calling "
                     "write_videofile.\nFor instance:\n"
-                    "  >>> clip.write_videofile('myvid.webm', audio='myaudio.mp3', "
-                    "codec='libvpx', audio_codec='aac')"
+                    "  >>> clip.write_videofile('myvid.webm', codec='libvpx')"
                 )
 
             elif "incorrect codec parameters ?" in ffmpeg_error:
@@ -248,7 +245,6 @@ def ffmpeg_write_video(
     preset="medium",
     write_logfile=False,
     audiofile=None,
-    audio_codec=None,
     threads=None,
     ffmpeg_params=None,
     logger="bar",
@@ -278,7 +274,6 @@ def ffmpeg_write_video(
         with_mask=has_mask,
         logfile=logfile,
         audiofile=audiofile,
-        audio_codec=audio_codec,
         threads=threads,
         ffmpeg_params=ffmpeg_params,
         pixel_format=pixel_format,
