@@ -1,3 +1,27 @@
+# 🎥 Custom MoviePy Fork (with GPU Acceleration)
+
+This is a **custom fork of MoviePy** that improves **GPU acceleration** for video encoding, particularly with **AMD hardware acceleration (`h264_amf` and `hevc_amf`)**. 
+
+## 🚀 **Key Differences from the Official MoviePy**
+### ✅ **1. Native GPU Acceleration Support**
+- Official MoviePy defaults to **CPU encoding**, which is slow.
+- This fork ensures that **AMD's h264_amf and hevc_amf codecs** are correctly used.
+- If an AMD codec is detected, it **automatically replaces `-preset` with `-quality balanced`** to avoid compatibility issues.
+
+### ✅ **2. Enhanced `FFMPEG_VideoWriter`**
+- **Custom implementation** of `FFMPEG_VideoWriter` that improves compatibility and performance.
+- If `h264_amf` or `hevc_amf` is selected, it **forces GPU encoding** and bypasses CPU fallback.
+
+### ✅ **3. Full Control Over MoviePy Execution**
+- This fork allows **more customization** for users who need hardware acceleration.
+- It removes limitations where `preset` was **forced to "medium"**, which caused issues with certain codecs.
+
+## 📌 **How to Install This Fork**
+To install this custom version, first uninstall the original MoviePy:
+
+------
+
+Original Moviepy README.md
 # MoviePy
 
 
