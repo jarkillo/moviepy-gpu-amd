@@ -11,7 +11,6 @@ from proglog import proglog
 from moviepy.config import FFMPEG_BINARY
 from moviepy.tools import cross_platform_popen_params, ffmpeg_escape_filename
 
-
 class FFMPEG_VideoWriter:
     """A class for FFMPEG-based video writing.
 
@@ -356,3 +355,5 @@ def ffmpeg_write_image(filename, image, logfile=False, pixel_format=None):
         raise IOError(error)
 
     del proc
+
+

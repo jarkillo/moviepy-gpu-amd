@@ -41,6 +41,12 @@ from moviepy.video.fx.Rotate import Rotate
 from moviepy.video.io.ffmpeg_writer import ffmpeg_write_video
 from moviepy.video.io.gif_writers import write_gif_with_imageio
 
+import proglog
+import subprocess
+import numpy as np
+import os
+from moviepy.video.io.ffmpeg_writer import FFMPEG_VideoWriter
+
 
 class VideoClip(Clip):
     """Base class for video clips.
@@ -2084,3 +2090,102 @@ class BitmapClip(VideoClip):
                     bitmap[-1][-1] += letter
 
         return bitmap
+    
+def is_amd_codec_available(codec):
+    """Verifica si FFMPEG tiene el codec AMD disponible."""
+    try:
+        output = subprocess.check_output(["ffmpeg", "-codecs"], stderr=subprocess.STDOUT, text=True)
+        return codec in output
+    except Exception:
+        return False
+
+def write_videofile(*args, **kwargs):
+    return write_videofile_wrapped(*args, **kwargs) 
+
+def write_videofile_wrapped(
+    clip,
+    filename,
+    fps,
+    codec="libx264",
+    preset="medium",
+    bitrate=None,
+    write_logfile=False,
+    audiofile=None,
+    threads=None,
+    ffmpeg_params=None,
+    pixel_format=None,
+    logger="bar",
+):    
+    """Versión mejorada de write_videofile con aceleración por GPU AMD y soporte de audio."""
+
+    logger = proglog.default_bar_logger(logger)
+    print("📌 Llamando a write_videofile_wrapped() para exportar el video...")
+
+
+    if write_logfile:
+        logfile = open(filename + ".log", "w+")
+    else:
+        logfile = None
+
+    logger(message=f"MoviePy - Writing video {filename}\n")
+
+    has_mask = clip.mask is not None
+
+    # 🔹 Detectar si el codec es AMD y cambiar 'preset' por 'quality'
+    if codec.lower() in ["h264_amf", "hevc_amf"]:  # Codecs AMD
+        if not is_amd_codec_available(codec):
+            logger(message=f"⚠️ AMD Codec '{codec}' no disponible en FFMPEG. Usando 'libx264' en su lugar.")
+            codec = "libx264"
+        else:
+            preset = None  # FFMPEG no usa 'preset' para AMD
+            quality = "balanced"  # Calidad recomendada (puedes cambiarlo a 'speed' o 'quality')
+            ffmpeg_params = (ffmpeg_params or []) + ["-quality", quality]
+            logger(message=f"🔄 AMD Codec detectado ({codec}), usando '-quality {quality}' en lugar de 'preset'.")
+
+    # 🔹 Si `audiofile` es None y `clip.audio` existe, extraerlo en un archivo temporal
+    TEMP_AUDIO_FILE = "temp_audio.aac"
+    if audiofile is None and clip.audio is not None:
+        logger(message="🎵 Extrayendo audio del clip original...")
+        clip.audio.write_audiofile(TEMP_AUDIO_FILE, codec="aac")
+        audiofile = TEMP_AUDIO_FILE  # 🔹 Ahora `audiofile` tiene un valor correcto
+
+    with FFMPEG_VideoWriter(
+    filename,
+    clip.size,
+    fps,
+    codec=codec,
+    preset=preset,
+    bitrate=bitrate,
+    with_mask=has_mask,
+    logfile=logfile,
+    audiofile=audiofile,
+    threads=threads,
+    ffmpeg_params=ffmpeg_params,
+    pixel_format=pixel_format,
+    ) as writer:
+        
+        print("✔ FFMPEG_VideoWriter iniciado correctamente.")  # 🔹 Verifica que la escritura de video comienza
+        print("FFMPEG_VideoWriter args:", filename, codec, fps, preset, quality, ffmpeg_params)
+
+        for t, frame in clip.iter_frames(
+            logger=logger, with_times=True, fps=fps, dtype="uint8"
+        ):
+
+            if clip.mask is not None:
+                mask = 255 * clip.mask.get_frame(t)
+                if mask.dtype != "uint8":
+                    mask = mask.astype("uint8")
+                frame = np.dstack([frame, mask])
+
+            writer.write_frame(frame)
+
+    print("✔ Exportación finalizada correctamente.")
+
+    if write_logfile:
+        logfile.close()
+
+    # 🔹 Eliminar el archivo temporal de audio después de la exportación
+    if os.path.exists(TEMP_AUDIO_FILE):
+        os.remove(TEMP_AUDIO_FILE)
+
+    logger(message="MoviePy - Done !")
